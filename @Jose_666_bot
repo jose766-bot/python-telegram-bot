@@ -1,0 +1,98 @@
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import openai
+import os
+
+# Tokens y API
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+openai.api_key = OPENAI_API_KEY
+
+# ID del administrador (reemplaza con tu ID de Telegram)
+ADMIN_ID = 123456789
+
+# Historial por usuario
+conversaciones = {}
+usuarios_registrados = set()
+
+# Comandos personalizados
+def command1(update, context):
+    update.message.reply_text("MANDE 5 FOTOS, REGIÓN, VINCULACIÓN Y PRECIO.")
+
+def command2(update, context):
+    update.message.reply_text("EN UNOS MINUTOS TE MANDAREMOS LAS CUTAS QUE TENEMOS DISPONIBLE.")
+
+def command3(update, context):
+    update.message.reply_text("POR AHORA EL BOT NO ESTÁ RECARGANDO PERO DIRÍGETE A ESTE NÚMERO +53 5 8340951. PUEDES RECARGAR, 100% CONFIABLE.")
+
+def command4(update, context):
+    update.message.reply_text("SI DESEAS COMPRAR LOGOS PARA FREE FIRE DEJE LOS SIGUIENTES DATOS: NOMBRE, NÚMERO, MÉTODOS DE PAGO, CANTIDAD DE TRATOS.")
+
+# Start con menú
+def start(update, context):
+    user_id = update.message.from_user.id
+    usuarios_registrados.add(user_id)
+    menu = (
+        "¡Hola! Soy tu asistente.\n\n"
+        "Menú de comandos:\n"
+        "/command1 - Solicitar recarga\n"
+        "/command2 - Ver cuotas disponibles\n"
+        "/command3 - Info de recarga alternativa\n"
+        "/command4 - Comprar logos Free Fire\n"
+    )
+    update.message.reply_text(menu)
+
+# Chat con memoria (IA)
+def responder(update, context):
+    user_id = update.message.from_user.id
+    mensaje = update.message.text
+
+    # Ignorar comandos
+    if mensaje.startswith("/"):
+        return
+
+    if user_id not in conversaciones:
+        conversaciones[user_id] = [{"role": "system", "content": "Eres un asistente útil."}]
+
+    conversaciones[user_id].append({"role": "user", "content": mensaje})
+    respuesta = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=conversaciones[user_id]
+    )
+    contenido = respuesta['choices'][0]['message']['content']
+    conversaciones[user_id].append({"role": "assistant", "content": contenido})
+    update.message.reply_text(contenido)
+
+# Enviar mensaje a otros usuarios (solo admin)
+def broadcast(update, context):
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        update.message.reply_text("No tienes permiso para usar este comando.")
+        return
+    if len(context.args) < 2:
+        update.message.reply_text("Uso: /enviar ID mensaje")
+        return
+    try:
+        target_id = int(context.args[0])
+        mensaje = ' '.join(context.args[1:])
+        context.bot.send_message(chat_id=target_id, text=mensaje)
+        update.message.reply_text("Mensaje enviado.")
+    except Exception as e:
+        update.message.reply_text(f"Error: {e}")
+
+def main():
+    updater = Updater(TELEGRAM_TOKEN, use_context=True)
+    dp = updater.dispatcher
+
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("command1", command1))
+    dp.add_handler(CommandHandler("command2", command2))
+    dp.add_handler(CommandHandler("command3", command3))
+    dp.add_handler(CommandHandler("command4", command4))
+    dp.add_handler(CommandHandler("enviar", broadcast, pass_args=True))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, responder))
+
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main(
